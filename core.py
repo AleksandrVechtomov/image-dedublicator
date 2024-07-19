@@ -34,7 +34,8 @@ class ImageDedublicator:
 
     def __init__(self,
                  source_dir,
-                 camera_id=248):
+                 camera_id=248,
+                 is_out=False):
 
         self.frame = None
 
@@ -55,6 +56,7 @@ class ImageDedublicator:
         self.camera_id = camera_id
         self.car_number = None
 
+        self.is_out = is_out
         self.polygon_zone = sv.PolygonZone(polygon=polygons.get(self.camera_id),
                                            triggering_anchors=(
                                                [sv.Position.BOTTOM_CENTER, sv.Position.BOTTOM_LEFT,
@@ -81,16 +83,18 @@ class ImageDedublicator:
                                     verbose=False)[0]
         self.detections_car = sv.Detections.from_ultralytics(result_car)
         self.detections_car = self.detections_car[np.isin(self.detections_car.class_id, selected_classes)]
-        mask_car = self.polygon_zone.trigger(self.detections_car)
-        self.detections_car = self.detections_car[mask_car]
+        if self.is_out is False:
+            mask_car = self.polygon_zone.trigger(self.detections_car)
+            self.detections_car = self.detections_car[mask_car]
 
     def predict_numberplate(self):
         result_numberplate = self.model_numberplate(self.frame,
                                                     conf=0.1,
                                                     verbose=False)[0]
         self.detections_numberplate = sv.Detections.from_ultralytics(result_numberplate)
-        mask_np = self.polygon_zone.trigger(self.detections_numberplate)
-        self.detections_numberplate = self.detections_numberplate[mask_np]
+        if self.is_out is False:
+            mask_np = self.polygon_zone.trigger(self.detections_numberplate)
+            self.detections_numberplate = self.detections_numberplate[mask_np]
 
     def predict_license_simbol(self):
         selected_classes_license_model = list(range(1, 23))  # выбранные классы, 0 - это рамка номера
@@ -159,14 +163,18 @@ class ImageDedublicator:
 
                     print(f'Распознан номер: {self.car_number}')
 
-                    if self.car_number not in numberplate_list and len(self.car_number) > 2:
+                    if self.car_number not in numberplate_list and 4 <= len(self.car_number) < 11:
                         saved_frame += 1
                         print('Это новый автомобиль. Сохраняем изображение!')
-                        self.predict_car()  # обнаруживаем авто
-                        self.crop_car()  # вырезаем авто
+                        if self.is_out is False:
+                            self.predict_car()  # обнаруживаем авто
+                            self.crop_car()  # вырезаем авто
 
-                        output_filename = os.path.join(output_path, video_source_name)
-                        cv2.imwrite(output_filename, self.car_frame)  # Сохранение обработанного изображения
+                            output_filename = os.path.join(output_path, video_source_name)
+                            cv2.imwrite(output_filename, self.car_frame)  # Сохранение обработанного изображения
+                        else:
+                            output_filename = os.path.join(output_path, video_source_name)
+                            cv2.imwrite(output_filename, self.frame)  # Сохранение исходного изображения
 
                     else:
                         print('Такой автомобиль уже существует. Пропускаем изображение...')
